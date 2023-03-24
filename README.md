@@ -26,6 +26,6 @@ sudo ./pi-expand \
 
 ## Tips
 
-* Balena Etcher recognizes unused space in a disk image and can optimize it out of disk writes. Writing an expanded image with Balena Etcher takes approximately the same time as
+* Balena Etcher recognizes unused space in a disk image and can optimize it out of disk writes. Writing an expanded image with Balena Etcher takes approximately the same time as writing a non-expanded image.
   * Note that Balena's optimization fails if the image is compressed.
 * If you're transferring the image across the network, gzipping it first will reduce file size by an order of magnitude.
