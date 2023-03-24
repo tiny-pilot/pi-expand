@@ -18,7 +18,7 @@ If you know the target microSD size in advance, you can perform the expansion st
 Expand the standard Raspberry Pi OS Lite image to 29800 MiB to fit a 32 GB microSD card:
 
 ```bash
-./pi-expand \
+sudo ./pi-expand \
   --in 2023-02-21-raspios-bullseye-armhf-lite.img \
   --out 2023-02-21-raspios-bullseye-armhf-lite-expanded.img \
   --size 29800
