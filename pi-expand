@@ -1,3 +1,125 @@
 #!/bin/bash
 
-# Placeholder
+# Expands a TinyPilot OS image and its filesystem to fill the specified size.
+#
+# Expanding the filesystem *before* the first boot allows us to skip the
+# resizing process *during* the first boot.
+#
+# We add an extra (small) partition after the rootfs to prevent
+# the Rasperry Pi from executing its own filesystem resizing process, see:
+# https://github.com/RPi-Distro/raspberrypi-sys-mods/blob/e44e4546a786dae68a053b822d5af14b2eea99b4/usr/lib/raspberrypi-sys-mods/firstboot#L109L112
+
+# Exit build script on first failure.
+set -e
+
+print_help() {
+  cat << EOF
+Usage: ${0##*/} [options]
+Expands a TinyPilot OS image and its filesystem to fill the specified size.
+  --size  SIZE  The size of the output image in MiB (default: 29800)
+  --in    FILE  The input image
+  --out   FILE  The output image
+  --help        Display this help and exit
+EOF
+}
+
+# Parse command-line arguments.
+if ! NEW_ARGS=$(getopt -q -o "" -l "size:,in:,out:,help" -- "$@"); then
+  print_help
+  exit 1
+fi
+
+# 29800 MiB is approximately equal to the total usable space on a 32GB SD card,
+# but it's slightly smaller, just in case of variance between cards.
+SIZE_MIB=29800
+
+# Process command-line arguments.
+eval set -- "${NEW_ARGS}"
+while true; do
+  case "$1" in
+    --size)
+      SIZE_MIB="$2"
+      shift 2
+      ;;
+    --in)
+      INPUT_FILE="$2"
+      shift 2
+      ;;
+    --out)
+      OUTPUT_FILE="$2"
+      shift 2
+      ;;
+    --help)
+      print_help
+      exit 1
+      ;;
+    --)
+      shift
+      break
+      ;;
+  esac
+done
+
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "This script requires root privileges." >&2
+  echo "Please re-run with sudo:" >&2
+  echo "  sudo ${0}" >&2
+  exit 1
+fi
+
+# Check that we have both an input and output file.
+if [[ -z "${INPUT_FILE}" ]] || [[ -z "${OUTPUT_FILE}" ]]; then
+  echo "--in and --out are required options" >&2
+  print_help
+  exit 1
+fi
+
+# Sanity check unique files.
+if [[ "${INPUT_FILE}" == "${OUTPUT_FILE}" ]]; then
+  echo "Input file and output file can't be the same file" >&2
+  print_help
+  exit 1
+fi
+
+# Sanity check to make sure we're not overwriting some other existing file.
+if [[ -e "${OUTPUT_FILE}" ]]; then
+  echo "Output file must not already exist" >&2
+  print_help
+  exit 1
+fi
+
+# Echo commands before executing them, by default to stderr.
+set -x
+
+# Exit on unset variable.
+set -u
+
+cp "${INPUT_FILE}" "${OUTPUT_FILE}"
+
+# Extend the output file to the desired image size.
+# Note that truncate treats 'M' as MiB not, MB.
+truncate --size "${SIZE_MIB}"M "${OUTPUT_FILE}"
+
+# Create a new 4 MiB partition at the end of the output file.
+parted --script --align optimal "${OUTPUT_FILE}" -- \
+  mkpart primary ext4 -4MiB 100%
+
+# The image's rootfs is partition number 2.
+readonly ROOTFS_PARTITION_NUMBER=2
+
+# Expand the rootfs partition to fill 100% of the space available.
+parted "${OUTPUT_FILE}" resizepart "${ROOTFS_PARTITION_NUMBER}" 100%
+
+# Get a loop device.
+readonly LOOP_DEVICE="$(sudo losetup --show --find --partscan "${OUTPUT_FILE}")"
+
+# Loop devices map partitions as `loop0p1` for partition 1, `loop0p2` for
+# partition 2, and so on. We'll concatenate LOOP_DEVICE with 'p' and
+# ROOTFS_PARTITION_NUMBER to create this string.
+readonly LOOP_DEVICE_PARTITION_LABEL="${LOOP_DEVICE}p${ROOTFS_PARTITION_NUMBER}"
+
+# Resize the filesystem using the loop device to fill the expanded partition.
+sudo resize2fs "${LOOP_DEVICE_PARTITION_LABEL}"
+
+# Release our loop device.
+sudo losetup --detach "${LOOP_DEVICE}"
