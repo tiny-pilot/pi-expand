@@ -119,6 +119,9 @@ readonly LOOP_DEVICE
 # ROOTFS_PARTITION_NUMBER to create this string.
 readonly LOOP_DEVICE_PARTITION_LABEL="${LOOP_DEVICE}p${ROOTFS_PARTITION_NUMBER}"
 
+# Check and safely repair any filesystem issues.
+e2fsck -fp "${LOOP_DEVICE_PARTITION_LABEL}"
+
 # Resize the filesystem using the loop device to fill the expanded partition.
 sudo resize2fs "${LOOP_DEVICE_PARTITION_LABEL}"
 
