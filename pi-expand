@@ -120,7 +120,7 @@ readonly LOOP_DEVICE
 readonly LOOP_DEVICE_PARTITION_LABEL="${LOOP_DEVICE}p${ROOTFS_PARTITION_NUMBER}"
 
 # Resize the filesystem using the loop device to fill the expanded partition.
-sudo resize2fs -f "${LOOP_DEVICE_PARTITION_LABEL}"
+sudo resize2fs "${LOOP_DEVICE_PARTITION_LABEL}"
 
 # Release our loop device.
 sudo losetup --detach "${LOOP_DEVICE}"
